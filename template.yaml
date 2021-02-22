@@ -22,8 +22,6 @@ Resources:
             Version: '2012-10-17'
           PolicyName: SparkflowLambdaRole
 
-
-
   # Function for creating and deleting EMR clusters
   ClusterManagerFunction:
     Type: AWS::Serverless::Function
@@ -53,3 +51,23 @@ Resources:
       Runtime: python3.7
       Timeout: 600
       Role: !GetAtt SparkflowLambdaRole.Arn
+
+  # Runs the ClusterPoller Lambda function on a schedule
+  ClusterPollerSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "ScheduledRule"
+      ScheduleExpression: "rate(5 minutes)"
+      State: "DISABLED"
+      Targets:
+        - Arn: !GetAtt ClusterPollerFunction.Arn
+          Id: "ClusterPollerScheduleV1"
+
+  # Provides scheduler access to the Lambda
+  PermissionForEventsToInvokeClusterPoller:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ClusterPollerFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt ClusterPollerSchedule.Arn
