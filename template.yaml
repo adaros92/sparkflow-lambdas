@@ -31,6 +31,10 @@ Resources:
       Runtime: python3.7
       Timeout: 600
       Role: !GetAtt SparkflowLambdaRole.Arn
+      Environment:
+        Variables:
+          sparkflow_cluster_pool_db: "sparkflow_cluster_pools"
+          sparkflow_clusters_db: "sparkflow_clusters"
 
   # Function for polling steps on EMR clusters
   ClusterPollerFunction:
@@ -41,6 +45,11 @@ Resources:
       Runtime: python3.7
       Timeout: 600
       Role: !GetAtt SparkflowLambdaRole.Arn
+      Environment:
+        Variables:
+          sparkflow_step_db: "sparkflow_job_runs"
+          sparkflow_cluster_pool_db: "sparkflow_cluster_pools"
+          sparkflow_clusters_db: "sparkflow_clusters"
 
   # Function for submitting steps
   StepManagerFunction:
@@ -51,6 +60,9 @@ Resources:
       Runtime: python3.7
       Timeout: 600
       Role: !GetAtt SparkflowLambdaRole.Arn
+      Environment:
+        Variables:
+          sparkflow_step_db: "sparkflow_job_runs"
 
   # Runs the ClusterPoller Lambda function on a schedule
   ClusterPollerSchedule:
