@@ -16,7 +16,7 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
-              - Action: [ 'sqs:*', 'dynamodb:*', 'ec2:*' ]
+              - Action: [ 'sqs:*', 'dynamodb:*', 'ec2:*', 'emr:*', 'elasticmapreduce:*', 'iam:*', 'cloudwatch:*']
                 Effect: Allow
                 Resource: '*'
             Version: '2012-10-17'
@@ -26,7 +26,7 @@ Resources:
   ClusterManagerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: sparkflowemr/
+      CodeUri: sparkflowemr
       Handler: cluster_manager.cluster_manager
       Runtime: python3.7
       Timeout: 600
@@ -35,12 +35,13 @@ Resources:
         Variables:
           sparkflow_cluster_pool_db: "sparkflow_cluster_pools"
           sparkflow_clusters_db: "sparkflow_clusters"
+          sparkflow_clusters_index_name: "ParentClusterPoolIndex"
 
   # Function for polling steps on EMR clusters
   ClusterPollerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: sparkflowemr/
+      CodeUri: sparkflowemr
       Handler: cluster_poller.cluster_poller
       Runtime: python3.7
       Timeout: 600
@@ -55,7 +56,7 @@ Resources:
   StepManagerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: sparkflowemr/
+      CodeUri: sparkflowemr
       Handler: step_manager.step_manager
       Runtime: python3.7
       Timeout: 600
@@ -83,3 +84,134 @@ Resources:
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: !GetAtt ClusterPollerSchedule.Arn
+
+  ## DynamoDB tables ###################################################
+
+  # Keeps a record of transforms onboarded to the SpakFlow system
+  TransformsDDB:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      SSESpecification:
+        SSEEnabled: 'false'
+      AttributeDefinitions:
+        - AttributeName: 'transform_id'
+          AttributeType: 'S'
+        - AttributeName: 'update_date'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'transform_id'
+          KeyType: 'HASH'
+        - AttributeName: 'update_date'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: "LastUpdateIndex"
+          KeySchema:
+            - AttributeName: "update_date"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: "sparkflow_transforms"
+
+  # Keeps a record of individual job runs that have executed
+  JobsDDB:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      SSESpecification:
+        SSEEnabled: 'false'
+      AttributeDefinitions:
+        - AttributeName: 'job_id'
+          AttributeType: 'S'
+        - AttributeName: 'transform_id'
+          AttributeType: 'S'
+        - AttributeName: 'execute_date'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'job_id'
+          KeyType: 'HASH'
+        - AttributeName: 'execute_date'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: "ParentTransformIndex"
+          KeySchema:
+            - AttributeName: "transform_id"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: "sparkflow_job_runs"
+
+  # Keeps a record of EMR cluster pools created by SparkFlow
+  ClusterPoolDDB:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      SSESpecification:
+        SSEEnabled: 'false'
+      AttributeDefinitions:
+        - AttributeName: 'cluster_pool_id'
+          AttributeType: 'S'
+        - AttributeName: 'update_date'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'cluster_pool_id'
+          KeyType: 'HASH'
+        - AttributeName: 'update_date'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: "LastUpdatedPoolIndex"
+          KeySchema:
+            - AttributeName: "update_date"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: "sparkflow_cluster_pools"
+
+  # Keeps a record of individual clusters under the pools created by SparkFlow
+  ClustersDDB:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      SSESpecification:
+        SSEEnabled: 'false'
+      AttributeDefinitions:
+        - AttributeName: 'cluster_id'
+          AttributeType: 'S'
+        - AttributeName: 'update_date'
+          AttributeType: 'S'
+        - AttributeName: 'cluster_pool_id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'cluster_id'
+          KeyType: 'HASH'
+        - AttributeName: 'update_date'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: "ParentClusterPoolIndex"
+          KeySchema:
+            - AttributeName: "cluster_pool_id"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: "sparkflow_clusters"
+
