@@ -165,8 +165,6 @@ Resources:
       KeySchema:
         - AttributeName: 'cluster_pool_id'
           KeyType: 'HASH'
-        - AttributeName: 'update_date'
-          KeyType: 'RANGE'
       GlobalSecondaryIndexes:
         - IndexName: "LastUpdatedPoolIndex"
           KeySchema:
@@ -191,15 +189,11 @@ Resources:
       AttributeDefinitions:
         - AttributeName: 'cluster_id'
           AttributeType: 'S'
-        - AttributeName: 'update_date'
-          AttributeType: 'S'
         - AttributeName: 'cluster_pool_id'
           AttributeType: 'S'
       KeySchema:
         - AttributeName: 'cluster_id'
           KeyType: 'HASH'
-        - AttributeName: 'update_date'
-          KeyType: 'RANGE'
       GlobalSecondaryIndexes:
         - IndexName: "ParentClusterPoolIndex"
           KeySchema:

@@ -1,23 +1,8 @@
 import logging
 import os
 
-from utils import logger, date
+from utils import logger, date, validation
 from sparkflowtools.models import db, cluster
-
-
-def _validate_event_inputs(event: dict) -> None:
-    """Validates that the input provided to the Lambda is correct
-
-    :param event the event dictionary passed in as Lambda input
-    """
-    required_inputs = ["emr_config", "operation"]
-    for required_input in required_inputs:
-        if required_input not in event:
-            raise ValueError("{0} must be part of the event input passed in to cluster_manager".format(required_input))
-    valid_operations = {"create", "delete"}
-    operation = event["operation"]
-    if operation not in valid_operations:
-        raise ValueError("operation must be one of {0} but found {1}".format(valid_operations, operation))
 
 
 def _parse_event_inputs(event: dict) -> dict:
@@ -26,7 +11,7 @@ def _parse_event_inputs(event: dict) -> dict:
     :param event the event dictionary passed in as Lambda input
     :returns the parsed event input to use downstream
     """
-    _validate_event_inputs(event)
+    validation.validate_event_inputs(event, ["operation", "emr_config"], {"operation": {"create", "delete"}})
     # TODO any parsing needed?
     return event
 
@@ -58,16 +43,28 @@ def _create_pool_of_clusters(emr_configs: list, cluster_builder: cluster.EmrBuil
     return cluster_records, _get_pool_id(cluster_records)
 
 
-def _delete_pool_of_clusters(pool_id: str, index_name: str, clusters_db: db.Dynamo):
+def _delete_pool_of_clusters(pool_id: str, index_name: str, clusters_db: db.Dynamo, cluster_pool_db: db.Dynamo):
+    """Deletes all of the clusters from the given cluster pool
+
+    :param pool_id the ID the cluster pool containing the clusters that need to be deleted
+    :param index_name the name of the index to use when querying the DB for the clusters
+    :param clusters_db the database object to use when querying the DB for the clusters
+    :param cluster_pool_db the database object to use when querying the DB for the cluster pool
+    """
     expression = "cluster_pool_id = :val"
-    expression_values = {':val': {'S': pool_id}}
-    records = clusters_db.get_records_with_index(index_name, expression, expression_values)
+    expression_values = {':val': pool_id}
+    records = clusters_db.get_records_with_index(index_name, expression, expression_values)[0]
+    records_to_delete = []
     for record in records:
         cluster_name = record["name"]
         cluster_id = record["cluster_id"]
-        cluster_object = cluster.EmrCluster(cluster_name).cluster_id = cluster_id
+        cluster_object = cluster.EmrCluster(cluster_name)
+        cluster_object.cluster_id = cluster_id
         logging.info("Terminating cluster {0} in pool {1}".format(cluster_id, pool_id))
         cluster_object.terminate()
+        records_to_delete.append({"Key": {"cluster_id": cluster_id}})
+    clusters_db.delete_records(records_to_delete)
+    cluster_pool_db.delete_records([{"Key": {"cluster_pool_id": pool_id}}])
 
 
 def _create_record_from_cluster(cluster_object: cluster.EmrCluster):
@@ -103,7 +100,9 @@ def _pesist_created_clusters(
         logging.warning("Could not insert cluster records {0}".format(records))
         # TODO cleanup by removing all clusters launched when one record can't be inserted
         logging.exception(e)
-    cluster_pool_record = [{"cluster_pool_id": pool_id, "update_date": update_date}]
+    cluster_pool_record = [
+        {"cluster_pool_id": pool_id, "update_date": update_date, "number_of_clusters": len(records)}
+    ]
     try:
         logging.info("Recording cluster pool ID {0} in {1}".format(pool_id, cluster_pool_db.table_name))
         cluster_pool_db.insert_records(cluster_pool_record)
@@ -138,6 +137,6 @@ def cluster_manager(event: dict, context: dict) -> dict:
         _pesist_created_clusters(cluster_records, pool_id, cluster_database, cluster_pool_database)
     elif operation == "delete":
         pool_id = parsed_event["pool_id"]
-        _delete_pool_of_clusters(pool_id, clusters_index_name, cluster_database)
+        _delete_pool_of_clusters(pool_id, clusters_index_name, cluster_database, cluster_pool_database)
 
     return {"Status": 200}
