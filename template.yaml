@@ -101,8 +101,6 @@ Resources:
       KeySchema:
         - AttributeName: 'transform_id'
           KeyType: 'HASH'
-        - AttributeName: 'update_date'
-          KeyType: 'RANGE'
       GlobalSecondaryIndexes:
         - IndexName: "LastUpdateIndex"
           KeySchema:
@@ -208,4 +206,3 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
       TableName: "sparkflow_clusters"
-
