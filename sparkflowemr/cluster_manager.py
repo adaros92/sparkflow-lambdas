@@ -72,8 +72,9 @@ def _create_record_from_cluster(cluster_object: cluster.EmrCluster):
         "cluster_id": cluster_object.cluster_id,
         "name": cluster_object.name,
         "state": cluster_object.state,
-        "fleet-type": cluster_object.fleet_type,
-        "tags": cluster_object.tags
+        "fleet_type": cluster_object.fleet_type,
+        "tags": cluster_object.tags,
+        "number_of_steps": 0
     }
 
 
@@ -101,7 +102,8 @@ def _pesist_created_clusters(
         # TODO cleanup by removing all clusters launched when one record can't be inserted
         logging.exception(e)
     cluster_pool_record = [
-        {"cluster_pool_id": pool_id, "update_date": update_date, "number_of_clusters": len(records)}
+        {"cluster_pool_id": pool_id, "update_date": update_date, "creation_date": update_date,
+         "number_of_clusters": len(records), "fleet_type": records[0]["fleet_type"]}
     ]
     try:
         logging.info("Recording cluster pool ID {0} in {1}".format(pool_id, cluster_pool_db.table_name))

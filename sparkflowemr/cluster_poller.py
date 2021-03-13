@@ -1,7 +1,7 @@
 import logging
 import os
 
-from sparkflowemr.utils import logger
+from utils import logger
 
 
 def cluster_poller(event, context):

@@ -51,6 +51,7 @@ Resources:
           sparkflow_step_db: "sparkflow_job_runs"
           sparkflow_cluster_pool_db: "sparkflow_cluster_pools"
           sparkflow_clusters_db: "sparkflow_clusters"
+          sparkflow_clusters_index_name: "ParentClusterPoolIndex"
 
   # Function for submitting steps
   StepManagerFunction:
@@ -64,6 +65,9 @@ Resources:
       Environment:
         Variables:
           sparkflow_step_db: "sparkflow_job_runs"
+          sparkflow_cluster_pool_db: "sparkflow_cluster_pools"
+          sparkflow_clusters_db: "sparkflow_clusters"
+          sparkflow_clusters_index_name: "ParentClusterPoolIndex"
 
   # Runs the ClusterPoller Lambda function on a schedule
   ClusterPollerSchedule:
