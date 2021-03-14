@@ -38,20 +38,22 @@ Resources:
           sparkflow_clusters_index_name: "ParentClusterPoolIndex"
 
   # Function for polling steps on EMR clusters
-  ClusterPollerFunction:
+  StepPollerFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: sparkflowemr
-      Handler: cluster_poller.cluster_poller
+      Handler: step_poller.step_poller
       Runtime: python3.7
       Timeout: 600
       Role: !GetAtt SparkflowLambdaRole.Arn
       Environment:
         Variables:
           sparkflow_step_db: "sparkflow_job_runs"
+          sparkflow_steps_index_name: "SubmittedDateIndex"
           sparkflow_cluster_pool_db: "sparkflow_cluster_pools"
           sparkflow_clusters_db: "sparkflow_clusters"
           sparkflow_clusters_index_name: "ParentClusterPoolIndex"
+          polling_date_range: "15"
 
   # Function for submitting steps
   StepManagerFunction:
@@ -69,25 +71,25 @@ Resources:
           sparkflow_clusters_db: "sparkflow_clusters"
           sparkflow_clusters_index_name: "ParentClusterPoolIndex"
 
-  # Runs the ClusterPoller Lambda function on a schedule
-  ClusterPollerSchedule:
+  # Runs the StepPoller Lambda function on a schedule
+  StepPollerSchedule:
     Type: AWS::Events::Rule
     Properties:
       Description: "ScheduledRule"
       ScheduleExpression: "rate(5 minutes)"
       State: "DISABLED"
       Targets:
-        - Arn: !GetAtt ClusterPollerFunction.Arn
-          Id: "ClusterPollerScheduleV1"
+        - Arn: !GetAtt StepPollerFunction.Arn
+          Id: "StepPollerScheduleV1"
 
   # Provides scheduler access to the Lambda
-  PermissionForEventsToInvokeClusterPoller:
+  PermissionForEventsToInvokeStepPoller:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref ClusterPollerFunction
+      FunctionName: !Ref StepPollerFunction
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !GetAtt ClusterPollerSchedule.Arn
+      SourceArn: !GetAtt StepPollerSchedule.Arn
 
   ## DynamoDB tables ###################################################
 
@@ -131,17 +133,24 @@ Resources:
           AttributeType: 'S'
         - AttributeName: 'transform_id'
           AttributeType: 'S'
-        - AttributeName: 'execute_date'
+        - AttributeName: 'submitted_date'
           AttributeType: 'S'
       KeySchema:
         - AttributeName: 'job_id'
           KeyType: 'HASH'
-        - AttributeName: 'execute_date'
-          KeyType: 'RANGE'
       GlobalSecondaryIndexes:
         - IndexName: "ParentTransformIndex"
           KeySchema:
             - AttributeName: "transform_id"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+        - IndexName: "SubmittedDateIndex"
+          KeySchema:
+            - AttributeName: "submitted_date"
               KeyType: "HASH"
           Projection:
             ProjectionType: "ALL"

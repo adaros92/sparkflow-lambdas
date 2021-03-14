@@ -100,9 +100,11 @@ def _create_step_record(step_object: step.EmrStep) -> list:
     :return: a list with the one step record to insert
     """
     creation_date = date.get_current_date_str()
+    creation_datetime = date.get_current_time_str()
     return [{
         "job_id": step_object.step_id,
-        "execute_date": creation_date,
+        "submitted_date": creation_date,
+        "submitted_datetime": creation_datetime,
         "action_on_failure": step_object.action_on_failure,
         "step_name": step_object.name,
         "cluster_id": step_object.cluster_id,
@@ -114,13 +116,15 @@ def _create_step_record(step_object: step.EmrStep) -> list:
     }]
 
 
-def _pesist_created_step(step_object: step.EmrStep, steps_db: db.Dynamo) -> None:
+def _pesist_created_step(step_object: step.EmrStep, steps_db: db.Dynamo, transform_id: str) -> None:
     """Records a step on EMR in DynamoDB to expose to the sparkflow UI
 
     :param step_object a step object as defined in sparkflowtools.models containing relevant step information
     :param steps_db the database object to record the step data with
+    :param transform_id the ID of the transform for which the step is running
     """
     step_record = _create_step_record(step_object)
+    step_record[0]["transform_id"] = transform_id
     try:
         logging.info("Recording step {0} in {1}".format(step_record, steps_db.table_name))
         steps_db.insert_records(step_record)
@@ -157,6 +161,6 @@ def step_manager(event, context):
     emr_step = _create_step_object(step_config)
     # Submit the step and keep a record of it on Dynamo
     _submit_step(emr_step, cluster_id)
-    _pesist_created_step(emr_step, steps_database)
+    _pesist_created_step(emr_step, steps_database, step_config["transform_id"])
 
     return {}
