@@ -26,6 +26,7 @@ Resources:
   ClusterManagerFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: SparkflowClusterManager
       CodeUri: sparkflowemr
       Handler: cluster_manager.cluster_manager
       Runtime: python3.7
@@ -41,8 +42,28 @@ Resources:
   StepPollerFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: SparkflowStepPoller
       CodeUri: sparkflowemr
       Handler: step_poller.step_poller
+      Runtime: python3.7
+      Timeout: 600
+      Role: !GetAtt SparkflowLambdaRole.Arn
+      Environment:
+        Variables:
+          sparkflow_step_db: "sparkflow_job_runs"
+          sparkflow_steps_index_name: "SubmittedDateIndex"
+          sparkflow_cluster_pool_db: "sparkflow_cluster_pools"
+          sparkflow_clusters_db: "sparkflow_clusters"
+          sparkflow_clusters_index_name: "ParentClusterPoolIndex"
+          polling_date_range: "15"
+
+  # Function for polling statuses of EMR clusters
+  ClusterPollerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SparkflowClusterPoller
+      CodeUri: sparkflowemr
+      Handler: cluster_poller.cluster_poller
       Runtime: python3.7
       Timeout: 600
       Role: !GetAtt SparkflowLambdaRole.Arn
@@ -59,6 +80,7 @@ Resources:
   StepManagerFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: SparkflowStepManager
       CodeUri: sparkflowemr
       Handler: step_manager.step_manager
       Runtime: python3.7
@@ -77,7 +99,7 @@ Resources:
     Properties:
       Description: "ScheduledRule"
       ScheduleExpression: "rate(5 minutes)"
-      State: "DISABLED"
+      State: "ENABLED"
       Targets:
         - Arn: !GetAtt StepPollerFunction.Arn
           Id: "StepPollerScheduleV1"
@@ -90,6 +112,26 @@ Resources:
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: !GetAtt StepPollerSchedule.Arn
+
+  # Runs the ClusterManager Lambda function on a schedule
+  ClusterPollerSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "ScheduledRule"
+      ScheduleExpression: "rate(5 minutes)"
+      State: "ENABLED"
+      Targets:
+        - Arn: !GetAtt ClusterPollerFunction.Arn
+          Id: "ClusterPollerScheduleV1"
+
+  # Provides scheduler access to the Lambda
+  PermissionForEventsToInvokeClusterPoller:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ClusterPollerFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt ClusterPollerSchedule.Arn
 
   ## DynamoDB tables ###################################################
 
